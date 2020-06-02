@@ -1,8 +1,8 @@
-from spinup.user_config import DEFAULT_DATA_DIR, FORCE_DATESTAMP, \
+from user_config import DEFAULT_DATA_DIR, FORCE_DATESTAMP, \
                                DEFAULT_SHORTHAND, WAIT_BEFORE_LAUNCH
-from spinup.utils.logx import colorize
-from spinup.utils.mpi_tools import mpi_fork, msg
-from spinup.utils.serialization_utils import convert_json
+from utils.logx import colorize
+from utils.mpi_tools import mpi_fork, msg
+from utils.serialization_utils import convert_json
 import base64
 from copy import deepcopy
 import cloudpickle
@@ -506,7 +506,7 @@ class ExperimentGrid:
         preparing = colorize('Preparing to run the following experiments...', 
                              color='green', bold=True)
         joined_var_names = '\n'.join(var_names)
-        announcement = f"\n{preparing}\n\n{joined_var_names}\n\n{line}"
+        announcement = "\n%s\n\n%s\n\n%d"%(preparing,joined_var_names,line)
         print(announcement)
 
 
