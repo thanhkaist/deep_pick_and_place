@@ -45,7 +45,7 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
          steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99, 
          polyak=0.995, pi_lr=1e-3, q_lr=1e-3, batch_size=100, start_steps=10000, 
          update_after=1000, update_every=50, act_noise=0.1, num_test_episodes=10, 
-         max_ep_len=1000, logger_kwargs=dict(), save_freq=1):
+         max_ep_len=100, logger_kwargs=dict(), save_freq=1):
     """
     Deep Deterministic Policy Gradient (DDPG)
 
@@ -306,10 +306,22 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             logger.log_tabular('Time', time.time()-start_time)
             logger.dump_tabular()
 
+def get_env_func_metaworld(env_name):
+    '''Return env function 
+    '''
+    from metaworld.benchmarks import ML1
+    def env_func():
+        env = ML1.get_train_tasks(env_name)  # Create an environment with task `pick_place`
+        tasks = env.sample_tasks(1)  # Sample a task (in this case, a goal variation)
+        env.set_task(tasks[0])  # Set task
+        return env
+    
+    return env_func
+    
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='HalfCheetah-v2')
+    parser.add_argument('--env', type=str, default='pick-place-v1')
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
@@ -321,7 +333,7 @@ if __name__ == '__main__':
     from utils.run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
-    ddpg(lambda : gym.make(args.env), actor_critic=core.MLPActorCritic,
+    ddpg(get_env_func_metaworld(args.env), actor_critic=core.MLPActorCritic,
          ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), 
          gamma=args.gamma, seed=args.seed, epochs=args.epochs,
          logger_kwargs=logger_kwargs)
