@@ -43,9 +43,9 @@ class ReplayBuffer:
 
 def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0, 
          steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99, 
-         polyak=0.995, pi_lr=1e-3, q_lr=1e-3, batch_size=100, start_steps=10000, 
+         polyak=0.995, pi_lr=5e-4, q_lr=5e-4, batch_size=100, start_steps=10000, 
          update_after=1000, update_every=50, act_noise=0.1, num_test_episodes=10, 
-         max_ep_len=100, logger_kwargs=dict(), save_freq=1):
+         max_ep_len=150, logger_kwargs=dict(), save_freq=1):
     """
     Deep Deterministic Policy Gradient (DDPG)
 
@@ -189,7 +189,7 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     # Set up model saving
     logger.setup_pytorch_saver(ac)
-
+    max_test_return = -np.inf
     def update(data):
         # First run one gradient descent step for Q.
         q_optimizer.zero_grad()
@@ -229,6 +229,7 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         return np.clip(a, -act_limit, act_limit)
 
     def test_agent():
+        avg_epret = 0 
         for j in range(num_test_episodes):
             o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
             while not(d or (ep_len == max_ep_len)):
@@ -236,7 +237,11 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                 o, r, d, _ = test_env.step(get_action(o, 0))
                 ep_ret += r
                 ep_len += 1
+            avg_epret += ep_ret
             logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
+            
+        avg_epret /=num_test_episodes
+        return avg_epret
 
     # Prepare for interaction with environment
     total_steps = steps_per_epoch * epochs
@@ -250,6 +255,12 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         # from a uniform distribution for better exploration. Afterwards, 
         # use the learned policy (with some noise, via act_noise). 
         if t > start_steps:
+            # Decay act_noise
+            #if t%1000000 == 0:
+            #    act_noise -= 0.1
+            #    if act_noise < 0:
+            #        act_noise = 0
+            
             a = get_action(o, act_noise)
         else:
             a = env.action_space.sample()
@@ -286,12 +297,14 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         if (t+1) % steps_per_epoch == 0:
             epoch = (t+1) // steps_per_epoch
 
+            # Test the performance of the deterministic version of the agent.
+            avg_test_ret = test_agent()
+            
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
-                logger.save_state({'env': env}, None)
-
-            # Test the performance of the deterministic version of the agent.
-            test_agent()
+                if avg_test_ret > max_test_return:
+                    max_test_return = avg_test_ret
+                    logger.save_state({'env': env}, None)        
 
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
@@ -309,11 +322,9 @@ def ddpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 def get_env_func_metaworld(env_name):
     '''Return env function 
     '''
-    from metaworld.benchmarks import ML1
+    from metaworld.envs.mujoco.sawyer_xyz import SawyerReachPushPickPlaceEnv
     def env_func():
-        env = ML1.get_train_tasks(env_name)  # Create an environment with task `pick_place`
-        tasks = env.sample_tasks(1)  # Sample a task (in this case, a goal variation)
-        env.set_task(tasks[0])  # Set task
+        env = SawyerReachPushPickPlaceEnv() # Create an environment with task `pick_place`
         return env
     
     return env_func
@@ -323,11 +334,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='pick-place-v1')
     parser.add_argument('--hid', type=int, default=256)
-    parser.add_argument('--l', type=int, default=2)
+    parser.add_argument('--l', type=int, default=3)
     parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--exp_name', type=str, default='ddpg')
+    parser.add_argument('--seed', '-s', type=int, default=2)
+    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--exp_name', type=str, default='ddpg1')
     args = parser.parse_args()
 
     from utils.run_utils import setup_logger_kwargs
